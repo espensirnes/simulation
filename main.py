@@ -8,7 +8,7 @@ import numpy as np
 import functions as fu
 
 def main():
-	multiproc=False
+	multiproc=True
 	
 	
 		
@@ -23,7 +23,7 @@ def main():
 			for cluster in [1,8]:
 				if not (mixed_norm<2 and cluster>1):
 					fname="%s%s_%s" %(name,mixed_norm,cluster)
-					simulation(mproc,2000,d,fname,adj,mixed_norm,cluster)
+					simulation(mproc,10000,d,fname,adj,mixed_norm,cluster)
 			
 	
 def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
@@ -41,19 +41,17 @@ def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
 	if not mproc is None:
 		mproc.send_dict({'p':p,'sd_arr':sd_arr})	
 		
-	sd=0.001#minimum dayly sd
-	periods=60*60*8#1 second periods
-	sd=sd/periods**0.5#minimum period sd
-	windows=[240,2,4,8,15,30,60,120,240,450,900,1800,3600,7200,14400,28800]
+	sd=0.000003
+	windows=[1,2,4,8,15,30,60,120,240,450,900,1800,3600,7200,14400,28800]
 	
 	if d>0:
-		n=30
+		n=31
 	else:
-		n=2
-		sd=sd*15**1.4		
+		n=3
+		sd=sd*16**1.5		
 
-	for i in range(6,n):
-		r=run_sims(mproc,sd*i**1.4,periods,d,nsims,windows,adj,mixed_norm,cluster,sd*0.05,p,sd_arr)
+	for i in range(2,n):
+		r=run_sims(mproc,sd*i**1.5,28800,d,nsims,windows,adj,mixed_norm,cluster,sd,p,sd_arr)
 		a.append(r)
 		if d==0:
 			break
@@ -104,7 +102,8 @@ def run_sims(mproc,sd,periods,d,nsims,windows,adj,mixed_norm,cluster,minsd,p,sd_
 	
 	r=np.concatenate(r,1)
 	sd=np.ones((len(r),1))*sd
-	names=['range','mean-square','empirical','mean_square_simple','avg_abs']
+
+	names=['range','msq_voladj','msq_ln','msq_raw','avg_abs']
 	names=names+[i+' SD' for i in names]
 	names=np.array(names).reshape((len(names),1))
 	r=np.concatenate((names,sd,r),1)

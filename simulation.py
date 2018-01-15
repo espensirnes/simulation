@@ -18,7 +18,8 @@ def run_sims_window(win,sd,periods,d,nsims,adj,mixed_norm,cluster,minsd,p,sd_arr
 		r=simulation(1E-10, sd, periods, d, win,adj,mixed_norm,cluster,p,sd_arr,E_abs)
 		a.append(r)	
 	a=np.array(a)
-	a_ln=np.array(np.log(a+(a==0)*minsd))
+	a=a+(a==0)*minsd
+	a_ln=np.array(np.log(a))
 	m=np.mean(a_ln,0)
 	ssd=(np.sum((a_ln)**2,0)/(nsims-1))**0.5
 	#print((np.mean(a,0),E_abs))
@@ -143,9 +144,9 @@ def simulation(mu,sd,N,d,win,adj,mixed_norm,cluster,p,sd_arr,E_abs):
 
 	rng=rng_func(lp_obs,win,adj,mixed_norm,sd,cluster,p,sd_arr)
 
-	msq,sd_empirical_raw,msq_simple,avg_abs=msq_func(win,windows,ret_period,adj,pmsq,sd_arr,d,p,psd,E_abs)
+	msq_voladj_emp,msq_ln,msq_raw,avg_abs=msq_func(win,windows,ret_period,adj,pmsq,sd_arr,d,p,psd,E_abs)
 	
-	return np.array([rng,msq,sd_empirical_raw,msq_simple,avg_abs])
+	return np.array([rng,msq_voladj_emp,msq_ln,msq_raw,avg_abs])
 
 
 def asympt_var(d,sd):
@@ -184,10 +185,10 @@ def msq_func(win,windows,ret,adj,sd,sd_arr,d,p,psd,E_abs):
 	
 	msq=(np.sum(ret**2)/win)**0.5
 	avg_abs=(np.sum(np.abs(ret))/win**0.5)/windows**0.5
-	vol_adj=voladj(d,sd_arr,sd,adj,p)
+	vol_adj=voladj(d,sd_arr*win**0.5,sd*win**0.5,adj,p)
 
 
-	abs_bias=ln_bias*(2/np.pi)**0.5/dof_adj(windows-1,adj)
+	abs_bias=ln_bias*(2/np.pi)**0.5/dofa
 	#abs_bias=((windows-1)/windows)**0.5*(2/np.pi)**0.5
 	avg_abs=avg_abs/abs_bias
 	if adj:
@@ -195,12 +196,13 @@ def msq_func(win,windows,ret,adj,sd,sd_arr,d,p,psd,E_abs):
 	else:
 		avg_abs=avg_abs/psd
 	
-	msq_voladj_emp=msq_empirical(msq/(windows-1)**0.5, d, dofa,sd)
+	msq_voladj_emp=msq_empirical(msq/(windows-1)**0.5, d/win**0.5, dofa,sd)
 
 
-	msq_ln=msq/(ln_bias*sd)
-	msq_voladj=msq/(vol_adj*sd*dofa*(windows-1)**0.5)
-	return msq,msq_voladj_emp,msq_ln,avg_abs
+	msq_ln=msq/(ln_bias*vol_adj*sd)
+	#msq_voladj=msq/(vol_adj*sd*dofa*(windows-1)**0.5)
+	msq_raw=msq/(sd*windows**0.5)
+	return msq_voladj_emp,msq_ln,msq_raw,avg_abs
 	
 
 def msq_empirical(msq,d,dofa,sd):
@@ -241,15 +243,16 @@ def rng_func(data,win, adj,mixed_norm,sd,cluster,p,sd_arr):
 	rng=np.mean(mx-mn)
 	if not adj:
 		return rng/sd
-
+	
 	sd_ratio=sd/(np.sum(p*sd_arr**2)**0.5)
 	if mixed_norm==0:
 		rng=rng/rng_adj(win,  0.50, 0.57836886,sd_ratio)
 	elif mixed_norm==1:
 		rng=rng/rng_adj(win,  0.475414072933964, 0.763539673812003,sd_ratio)
-	elif mixed_norm==2 and cluster==8:
+	elif mixed_norm==2 and cluster==1:
 		rng=rng/rng_adj(win,  0.310148851695317, 3.096267675,sd_ratio)
 	elif mixed_norm==2:
+		
 		rng=rng/rng_adj(win, 0.263605749834211, 4.540561831,sd_ratio)
 	rng=rng/sd
 	return rng
