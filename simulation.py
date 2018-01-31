@@ -170,35 +170,6 @@ def voladj(d,sd_arr,sd,adj,p):
 		v=1	
 	return v
 
-def msq_func2(win,windows,ret,adj,sd,sd_arr,d,p,psd,E_abs):
-	if windows==1:
-		return np.nan,np.nan,np.nan,np.nan
-	freq=len(np.nonzero(ret==0)[0])/len(ret)
-	#ret=np.random.normal(0,sd*win**0.5,windows)
-	ret=ret-np.sum(ret)/(windows)
-	ln_bias=(2*np.exp(special.psi((windows-1)/2)))**0.5
-	dofa=dof_adj2(windows-1,adj)
-	
-	
-	msq=(np.sum(ret**2)/win)**0.5
-	avg_abs=(np.sum(np.abs(ret))/win**0.5)/windows**0.5
-	vol_adj=voladj2(d,sd_arr*win**0.5,sd*win**0.5,adj,p)
-
-
-	abs_bias=ln_bias*(2/np.pi)**0.5/dofa
-	#abs_bias=((windows-1)/windows)**0.5*(2/np.pi)**0.5
-	avg_abs=avg_abs/abs_bias
-	if adj:
-		avg_abs=avg_abs/E_abs
-	else:
-		avg_abs=avg_abs/psd
-	
-	msq_voladj_emp=msq_empirical(msq/(windows-1)**0.5, d/win**0.5, dofa,sd)
-
-
-	msq_ln=msq/(ln_bias*vol_adj*sd)
-	msq_raw=msq/(sd*windows**0.5)
-	return msq_voladj_emp,msq_ln,msq_raw,avg_abs
 
 
 def dof_adj2(k,adj):
