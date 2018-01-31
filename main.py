@@ -56,9 +56,11 @@ def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
 		if d==0:
 			break
 	a=np.concatenate(a,0)
-	b=np.array([sd,nsims]+list(windows))
-	b=b.reshape((1,len(b)))
-	a=np.concatenate((b,a),0)
+	b1=np.array(['_ID','SD']+list(windows))
+	b2=np.array([nsims,sd]+len(windows)*[0])
+	b1=b1.reshape((1,len(b1)))
+	b2=b2.reshape((1,len(b2)))
+	a=np.concatenate((b1,a,b2),0)
 	fu.savevar(a,name+'.csv')
 	
 def normalize(p,sd,sd_norm):
@@ -104,7 +106,9 @@ def run_sims(mproc,sd,periods,d,nsims,windows,adj,mixed_norm,cluster,minsd,p,sd_
 	sd=np.ones((len(r),1))*sd
 
 	names=['range','msq_voladj','msq_ln','msq_raw','avg_abs']
-	names=names+[i+' SD' for i in names]
+	n=len(names)
+	names=names+[names[i]+' SD' for i in range(n)]
+	names=names+[names[i]+' exp err' for i in range(n)]
 	names=np.array(names).reshape((len(names),1))
 	r=np.concatenate((names,sd,r),1)
 	return r
