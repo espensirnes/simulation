@@ -25,9 +25,7 @@ def run_sims_window(win,sd,periods,d,nsims,adj,mixed_norm,cluster,minsd,p,sd_arr
 	#print((np.mean(a,0),E_abs))
 	m=np.concatenate((m,ssd,np.abs(m)))
 	m=m.reshape((len(m),1))
-	
-	print(m[:5])
-	print(m[5:])
+
 	return m
 
 
@@ -141,9 +139,9 @@ def simulation(mu,sd,N,d,win,adj,mixed_norm,cluster,p,sd_arr,E_abs):
 
 	rng=rng_func(lp_obs,win,adj,mixed_norm,sd,cluster,p,sd_arr)
 
-	msq_voladj_emp,msq_ln,msq_raw,avg_abs=msq_func(win,windows,ret_period,adj,pmsq,sd_arr,d,p,psd,E_abs)
+	msq_adj,msq_unadj,avg_abs=msq_func(win,windows,ret_period,adj,pmsq,sd_arr,d,p,psd,E_abs)
 	
-	return np.array([rng,msq_voladj_emp,msq_ln,msq_raw,avg_abs])
+	return np.array([rng,msq_adj,msq_unadj,avg_abs])
 
 
 def asympt_var(d,sd):
@@ -170,25 +168,10 @@ def voladj(d,sd_arr,sd,adj,p):
 		v=1	
 	return v
 
-
-
-def dof_adj2(k,adj):
-
-	if k>250 or not adj:
-		a=1
-	else:
-		if k<1:
-			k=1
-		a=2**0.5*special.gamma((k+1)/2)/(special.gamma(k/2))	
-		a=a/k**0.5
-	return a
-
-
 def msq_func(win,windows,ret,adj,sd,sd_arr,d,p,psd,E_abs):
 	if windows==1:
 		return np.nan,np.nan,np.nan,np.nan
 	freq=len(np.nonzero(ret==0)[0])/len(ret)
-	#ret=np.random.normal(0,sd*win**0.5,windows)
 	ret=ret-np.sum(ret)/(windows)
 	ln_bias=(2*np.exp(special.psi((windows-1)/2))/(windows-1))**0.5
 	dofa=dof_adj(windows-1,adj)
@@ -200,19 +183,16 @@ def msq_func(win,windows,ret,adj,sd,sd_arr,d,p,psd,E_abs):
 
 
 	abs_bias=ln_bias*(2/np.pi)**0.5/dofa
-	#abs_bias=((windows-1)/windows)**0.5*(2/np.pi)**0.5
+	
 	avg_abs=avg_abs/abs_bias
 	if adj:
 		avg_abs=avg_abs/E_abs
 	else:
 		avg_abs=avg_abs/psd
 	
-	msq_voladj_emp=msq_empirical(msq, d/win**0.5, dofa,sd)
-
-
-	msq_ln=msq/(ln_bias*vol_adj*sd)
-	msq_raw=msq/sd
-	return msq_voladj_emp,msq_ln,msq_raw,avg_abs
+	msq_adj=msq/(ln_bias*vol_adj*sd)
+	msq_unadj=msq/(ln_bias*sd)
+	return msq_adj,msq_unadj,avg_abs
 
 
 
@@ -228,25 +208,6 @@ def dof_adj(k,adj):
 	return a
 
 	
-
-def msq_empirical(msq,d,dofa,sd):
-	if d==0:
-		return msq/(dofa*sd)
-	sd_emp_large_error=(0.5*np.pi)**0.5*msq**2/d
-	sd_emp_small_error=(msq**2-(d**2/(6.0)))
-	if sd_emp_small_error>0:
-		sd_emp=sd_emp_small_error**0.5
-	elif sd_emp_large_error>0:
-		sd_emp=sd_emp_large_error
-	else:
-		sd_emp=d*0.01
-	if d/sd_emp>2.5:
-		sd_emp=sd_emp_large_error
-
-	sd_emp=sd_emp/(dofa*sd)
-	return sd_emp
-
-	
 def rng_func(data,win, adj,mixed_norm,sd,cluster,p,sd_arr):
 	if win==1:
 		return np.nan	
@@ -257,19 +218,15 @@ def rng_func(data,win, adj,mixed_norm,sd,cluster,p,sd_arr):
 	if not adj:
 		return rng/sd
 	
-	sd_ratio=sd/(np.sum(p*sd_arr**2)**0.5)
-	q=1/(win/2)**0.5
-	if mixed_norm==2 and cluster==1:
-		rng_norm=rng_adj(win, 1, q,sd_ratio)
-	else:
-		if mixed_norm==2 and cluster==8:
-			rng_norm1=rng_adj(win,0, q,1)
-			rng_norm2=rng_adj(win, 1, q,sd_ratio)
-			rng_norm=rng_norm1*q**0.6+rng_norm2*(1-q**0.6)
-		else:
-			rng_norm=rng_adj(win,0, q,sd_ratio)
-	rng=rng/(rng_norm*sd)
-	return rng
+	sd_var=np.sum(p*sd_arr**2)**0.5
+	ass_exp=(8/np.pi)**0.5
+	adj=sd_var*ass_exp*(win-1)**0.5
+	r1= rng/adj
+	adj=sd*0.5*ass_exp*(win-1)**0.5
+	r2= rng/adj
+	a=np.exp(-0.25*(win-2))
+	return a*r2+(1-a)*r1
+
 
 
 def rng_adj(win,a,q,sd_ratio):

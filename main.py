@@ -23,7 +23,7 @@ def main():
 			for cluster in [1,8]:
 				if not (mixed_norm<2 and cluster>1):
 					fname="%s%s_%s" %(name,mixed_norm,cluster)
-					simulation(mproc,10000,d,fname,adj,mixed_norm,cluster)
+					simulation(mproc,1000,d,fname,adj,mixed_norm,cluster)
 			
 	
 def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
@@ -105,7 +105,7 @@ def run_sims(mproc,sd,periods,d,nsims,windows,adj,mixed_norm,cluster,minsd,p,sd_
 	r=np.concatenate(r,1)
 	sd=np.ones((len(r),1))*sd
 
-	names=['range','msq_voladj','msq_ln','msq_raw','avg_abs']
+	names=['range','msq_adj','msq_unadj','avg_abs']
 	n=len(names)
 	names=names+[names[i]+' SD' for i in range(n)]
 	names=names+[names[i]+' exp err' for i in range(n)]
