@@ -8,7 +8,7 @@ import numpy as np
 import functions as fu
 
 def main():
-	multiproc=True
+	multiproc=False
 	
 	
 		
@@ -18,12 +18,12 @@ def main():
 	else:
 		mproc=None
 	
-	for mixed_norm in [0,1,2]:
+	for mixed_norm in [2,1,2]:
 		for adj,d,name in  [[True,0.001,'discrete'],[False,0,'unadjusted'],[True,0,'continous']]:
 			for cluster in [1,8]:
 				if not (mixed_norm<2 and cluster>1):
 					fname="%s%s_%s" %(name,mixed_norm,cluster)
-					simulation(mproc,1000,d,fname,adj,mixed_norm,cluster)
+					simulation(mproc,5000,d,fname,adj,mixed_norm,cluster)
 			
 	
 def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
@@ -42,7 +42,7 @@ def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
 		mproc.send_dict({'p':p,'sd_arr':sd_arr})	
 		
 	sd=0.000003
-	windows=[1,2,4,8,15,30,60,120,240,450,900,1800,3600,7200,14400,28800]
+	windows=[8,2,4,8,15,30,60,120,240,450,900,1800,3600,7200,14400,28800]
 	
 	if d>0:
 		n=31
@@ -50,7 +50,7 @@ def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
 		n=3
 		sd=sd*16**1.5		
 
-	for i in range(2,n):
+	for i in range(n-2,n):
 		r=run_sims(mproc,sd*i**1.5,28800,d,nsims,windows,adj,mixed_norm,cluster,sd,p,sd_arr)
 		a.append(r)
 		if d==0:

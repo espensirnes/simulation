@@ -14,6 +14,7 @@ def run_sims_window(win,sd,periods,d,nsims,adj,mixed_norm,cluster,minsd,p,sd_arr
 	a=[]
 	sd_arr=sd_arr*sd
 	E_abs=E_abs_func(win, sd_arr, p,cluster,mixed_norm)
+	k=E_abs_calc2(p, sd_arr, win)
 	for i in range(nsims):
 		r=simulation(1E-10, sd, periods, d, win,adj,mixed_norm,cluster,p,sd_arr,E_abs)
 		a.append(r)	
@@ -66,12 +67,32 @@ def E_abs_func2(win,sd_arr,p):
 		E_abs=E_abs_calc(p,sd_arr,win)
 	return E_abs
 
+def E_abs_calc2(p,sd_arr,win):
+	sd_arrsq=sd_arr**2
+	K=len(sd_arr)
+	a=np.rollaxis(np.indices([win+1]*(K-1)),0,K).reshape((win+1)**(K-1),K-1)
+	a=a[np.sum(a,1)<=win]
+	b=win-np.sum(a,1).reshape((len(a),1))
+	a=np.concatenate((a,b),1)
+	m=multinominaldist(a,p)
+	ret=np.sum(a*sd_arrsq,1)**0.5
+	ret2=np.sum(ret*m)/win**0.5
+		
+	return ret2
+
+def multinominaldist(q,p):
+	a=special.gammaln(np.sum(q[0])+1)
+	b=np.sum(special.gammaln(q+1),1)
+	c=np.prod(p**q,1)
+
+	return np.exp(a-b)*c
 
 def E_abs_calc(p,sd_arr,win):
 	sd_arrsq=sd_arr**2
 	K=len(sd_arr)
 	a=np.rollaxis(np.indices([K]*win),0,win+1).reshape(K**win,win)
-	return np.sum(np.prod(p[a],1)*(np.sum(sd_arrsq[a],1)/win)**0.5)	
+	ret=np.sum(np.prod(p[a],1)*(np.sum(sd_arrsq[a],1)/win)**0.5)	
+	return ret
 
 def random_mixed_normal(mu,N,sd_arr,p,cluster):
 	"""sd_arr should be an array of standard deviations such that np.sum(p*np.array(sd_arr))=1"""
@@ -168,18 +189,18 @@ def voladj(d,sd_arr,sd,adj,p):
 		v=1	
 	return v
 
-def msq_func(win,windows,ret,adj,sd,sd_arr,d,p,psd,E_abs):
+def msq_func(win,windows,ret,adj,pmsq,sd_arr,d,p,psd,E_abs):
 	if windows==1:
-		return np.nan,np.nan,np.nan,np.nan
+		return np.nan,np.nan,np.nan
 	freq=len(np.nonzero(ret==0)[0])/len(ret)
 	ret=ret-np.sum(ret)/(windows)
 	ln_bias=(2*np.exp(special.psi((windows-1)/2))/(windows-1))**0.5
 	dofa=dof_adj(windows-1,adj)
 	
 	
-	msq=(np.sum(ret**2)/(win*(windows-1)))**0.5
-	avg_abs=(np.sum(np.abs(ret))/win**0.5)/(windows-1)
-	vol_adj=voladj(d,sd_arr*win**0.5,sd*win**0.5,adj,p)
+	msq=(np.sum(ret**2)/(win*(windows-1)))
+	avg_abs=(np.sum(np.abs(ret))/win**0.5)/(((windows-1)*(windows))**0.5)
+	vol_adj=voladj(d,sd_arr*win**0.5,pmsq*win**0.5,adj,p)
 
 
 	abs_bias=ln_bias*(2/np.pi)**0.5/dofa
@@ -190,8 +211,8 @@ def msq_func(win,windows,ret,adj,sd,sd_arr,d,p,psd,E_abs):
 	else:
 		avg_abs=avg_abs/psd
 	
-	msq_adj=msq/(ln_bias*vol_adj*sd)
-	msq_unadj=msq/(ln_bias*sd)
+	msq_adj=msq/(ln_bias*vol_adj*pmsq)**2
+	msq_unadj=msq/(ln_bias*pmsq)**2
 	return msq_adj,msq_unadj,avg_abs
 
 
@@ -225,14 +246,8 @@ def rng_func(data,win, adj,mixed_norm,sd,cluster,p,sd_arr):
 	adj=sd*0.5*ass_exp*(win-1)**0.5
 	r2= rng/adj
 	a=np.exp(-0.25*(win-2))
-	return a*r2+(1-a)*r1
+	ret=a*r2+(1-a)*r1
+	return ret
 
-
-
-def rng_adj(win,a,q,sd_ratio):
-	asy_exp=(8/np.pi)**0.5
-	adj=(1-0.5*q)*asy_exp*((win-1)**0.5)*(q+(1-q)/sd_ratio**(1-a*q))
-
-	return adj
 
 
