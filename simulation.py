@@ -14,7 +14,6 @@ def run_sims_window(win,sd,periods,d,nsims,adj,mixed_norm,cluster,minsd,p,sd_arr
 	a=[]
 	sd_arr=sd_arr*sd
 	E_abs=E_abs_func(win, sd_arr, p,cluster,mixed_norm)
-	k=E_abs_calc2(p, sd_arr, win)
 	for i in range(nsims):
 		r=simulation(1E-10, sd, periods, d, win,adj,mixed_norm,cluster,p,sd_arr,E_abs)
 		a.append(r)	
@@ -49,25 +48,18 @@ def E_abs_func(win,sd_arr,p,cluster,mixed_norm):
 
 
 def E_abs_func2(win,sd_arr,p):
-	maxwin=150.0
-	Evar=np.sum(p*sd_arr**2)**0.5
+	
 	if type(sd_arr)==float:
-		E_abs = Evar
-	elif win>15 and win<maxwin: 
-		e1=E_abs_calc(p,sd_arr,15)
-		e2=Evar
-		x=(win-15)/(maxwin-15)
-		x=x**0.5
-		E_abs =(1-x)*e1+x*e2
-	elif win>=maxwin:
-		E_abs=Evar
-	elif win==0:
-		E_abs = np.sum(p*sd_arr)
+		return Evar
+	elif win==0: 
+		return np.sum(p*sd_arr)
+	elif win<=450: 
+		return E_abs_calc(p, sd_arr, win)
 	else:
-		E_abs=E_abs_calc(p,sd_arr,win)
-	return E_abs
+		return np.sum(p*sd_arr**2)**0.5
 
-def E_abs_calc2(p,sd_arr,win):
+
+def E_abs_calc(p,sd_arr,win):
 	sd_arrsq=sd_arr**2
 	K=len(sd_arr)
 	a=np.rollaxis(np.indices([win+1]*(K-1)),0,K).reshape((win+1)**(K-1),K-1)
@@ -87,12 +79,7 @@ def multinominaldist(q,p):
 
 	return np.exp(a-b)*c
 
-def E_abs_calc(p,sd_arr,win):
-	sd_arrsq=sd_arr**2
-	K=len(sd_arr)
-	a=np.rollaxis(np.indices([K]*win),0,win+1).reshape(K**win,win)
-	ret=np.sum(np.prod(p[a],1)*(np.sum(sd_arrsq[a],1)/win)**0.5)	
-	return ret
+
 
 def random_mixed_normal(mu,N,sd_arr,p,cluster):
 	"""sd_arr should be an array of standard deviations such that np.sum(p*np.array(sd_arr))=1"""
@@ -245,7 +232,7 @@ def rng_func(data,win, adj,mixed_norm,sd,cluster,p,sd_arr):
 	r1= rng/adj
 	adj=sd*0.5*ass_exp*(win-1)**0.5
 	r2= rng/adj
-	a=np.exp(-0.25*(win-2))
+	a=np.exp(-0.13677*(win-2))
 	ret=a*r2+(1-a)*r1
 	return ret
 

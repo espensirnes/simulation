@@ -8,7 +8,7 @@ import numpy as np
 import functions as fu
 
 def main():
-	multiproc=False
+	multiproc=True
 	
 	
 		
@@ -18,12 +18,12 @@ def main():
 	else:
 		mproc=None
 	
-	for mixed_norm in [2,1,2]:
-		for adj,d,name in  [[True,0.001,'discrete'],[False,0,'unadjusted'],[True,0,'continous']]:
+	for mixed_norm in [0,1,2]:
+		for adj,d,name in  [[True,0.00316157992580004,'discrete'],[False,0,'unadjusted'],[True,0,'continous']]:
 			for cluster in [1,8]:
 				if not (mixed_norm<2 and cluster>1):
 					fname="%s%s_%s" %(name,mixed_norm,cluster)
-					simulation(mproc,5000,d,fname,adj,mixed_norm,cluster)
+					simulation(mproc,20000,d,fname,adj,mixed_norm,cluster)
 			
 	
 def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
@@ -42,16 +42,22 @@ def simulation(mproc,nsims,d,name,adj,mixed_norm,cluster):
 		mproc.send_dict({'p':p,'sd_arr':sd_arr})	
 		
 	sd=0.000003
-	windows=[8,2,4,8,15,30,60,120,240,450,900,1800,3600,7200,14400,28800]
+	windows=[1,2,4,8,15,30,60,120,240,450,900,1800,3600,7200,14400,28800]
+	sds=    [3.60098707366965E-05, 	4.94210799812644E-05, 	5.79468667045995E-05, 	6.53806107798397E-05, 	
+	         7.22187019570311E-05, 	7.88120376136979E-05, 	8.53842914052493E-05, 	9.21006887714667E-05, 	
+	         9.90900794604503E-05, 	0.000106529896870796, 	0.000114509169050842, 	0.000123296858335587, 	
+	         0.000133355271290085, 	0.000145046030063154, 	0.000158818654285202, 	0.000175783974006693, 	
+	         0.000197889890781447, 	0.000230017140173149, 	0.000284348386931211, 	0.000469375158868849]	
+ 
 	
 	if d>0:
-		n=31
+		n=len(sds)
 	else:
 		n=3
-		sd=sd*16**1.5		
+		sd=sds[16]	
 
-	for i in range(n-2,n):
-		r=run_sims(mproc,sd*i**1.5,28800,d,nsims,windows,adj,mixed_norm,cluster,sd,p,sd_arr)
+	for i in range(1,n):
+		r=run_sims(mproc,sds[i],28800,d,nsims,windows,adj,mixed_norm,cluster,sd,p,sd_arr)
 		a.append(r)
 		if d==0:
 			break
