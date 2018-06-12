@@ -8,5 +8,6 @@ proj.file-list = [loc('functions.py'),
                   loc('main.py'),
                   loc('multi_core.py'),
                   loc('simulation.py'),
+                  loc('simulation_old.py'),
                   loc('slave.py')]
 proj.file-type = 'shared'
