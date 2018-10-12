@@ -4,7 +4,9 @@
 # Wing IDE project file                                          #
 ##################################################################
 [project attributes]
-proj.file-list = [loc('functions.py'),
+proj.file-list = [loc('calculations.py'),
+                  loc('functions.py'),
+                  loc('integration.py'),
                   loc('main.py'),
                   loc('multi_core.py'),
                   loc('simulation.py'),

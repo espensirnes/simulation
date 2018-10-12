@@ -5,60 +5,108 @@ import numpy as np
 import functions as fu
 from scipy import special
 from scipy import stats
+from scipy.stats import binom
 import traceback
 import sys
-	
-	
-def run_sims_window(win,sd,periods,d,nsims,adj,mixed_norm,cluster,minsd,p,sd_arr,sds):
-	a=[]
+import calculations
+
+
+
+def run_sims_window(win,sd,periods,d,nsims,adj,mixed_norm,cluster,p,sd_arr,sds,mixedcovadj):
+
+	arr=[]
 	sd_arr=sd_arr*sd
 	pmsq=np.sum(p*sd_arr**2)**0.5
-
+	psd=np.sum(p*sd_arr)
+	
 	smean=np.mean(sds)
 	#avg_tz_bias,void=calc_adj(win, cluster, pmsq*(smean/sd),d,p,sd_arr*(smean/sd))
-	
+
 	#for i in [1, 2, 4, 8, 15, 30, 60, 120, 240, 480, 960, 1920, 3600, 7200, 14400, 28800]:
 	#	print(cluster_inflation(p,i,cluster,periods,sd_arr))
-		
-	(ineff_c_abs, ineff_c_sq) =cluster_inflation(p,win,cluster,periods,sd_arr,d)
+
+	#(ineff_c_abs, ineff_c_sq) =cluster_inflation(p,win,cluster,periods,sd_arr,d)
 
 	tz_bias,E_abs=calc_adj(win, cluster, pmsq, d, p, sd_arr)
-	tz_bias2,E_abs2=calc_adj(win-1, cluster, pmsq, d, p, sd_arr)
+	E_rng=calc_E_rng(win-1, cluster, pmsq, d, p, sd_arr)
+
+	v=analytical_efficiency(periods,d,sd,psd,p,cluster,sd_arr,mixedcovadj,win, tz_bias)
+	
 	for i in range(nsims):
-		r=simulation(1E-10, sd, periods, d, win,adj,mixed_norm,cluster,p,sd_arr,E_abs,E_abs2,pmsq,1,tz_bias)
-		a.append(r)	
-	a=np.array(a)
-	
-	a=a+(a==0)*minsd
-	a_ln=np.log(a)
-	m=np.mean(a_ln,0)
-	
-	ssd=(np.sum((a_ln-m)**2,0)/(nsims-1))**0.5
-	ssd=ssd
-	#print((np.mean(a,0),E_abs))
-	m_arr=np.concatenate((m,ssd,np.abs(m),[ineff_c_sq,ineff_c_abs]))
+		r=simulation(1E-10, sd, periods, d, win,adj,mixed_norm,cluster,p,sd_arr,E_abs,E_rng,pmsq,psd,1,tz_bias)
+		arr.append(r)	
+	arr=np.array(arr)
+	m=np.mean(arr,0)
+
+	abserr=np.mean(np.abs((arr-m)/m),0)/(2/np.pi)**0.5	#np.mean(np.abs(arr-m),0)/((2/np.pi)**0.5)
+
+	m_arr=np.concatenate((m,abserr,np.abs(m),[1,1,v]))
 	m_arr=m_arr.reshape((len(m_arr),1))
-	print (ssd)
-	print((ineff_c_abs, ineff_c_sq))
+
+
+
+
+
 	return m_arr
 
 
+def analytical_efficiency(T,d,sd,psd,p,cluster,sd_arr,mixedcovadj,win,tz_bias):
+	if d==0:
+		d=1
+	w=int(T/cluster)
+	windows=int(T/win)
+	sdP,P=prob_space(p, sd_arr,w,True)	
+	Pd=((2/np.pi)**0.5*psd/d)
+	tz2bias0=Pd*d**2
+	
+	if type(P)==int:
+		var,c,pdi,tzi=analeff(T,d,p,sd_arr,mixedcovadj)
+		inefficiency=var/tz2bias0**2
+	else:
+		v=0
+		for i in range(len(P)):
+			sd_cl=sdP[i]/w
+			var,c,pdi,tzi=analeff(T,d,1,sd_cl,1)
+			ineff=var+(tzi-tz2bias0)**2
+			v+=P[i]*ineff
+		inefficiency=v/tz2bias0**2
+		
+	#adding intrinsic inefficiency
+	intr=2*(windows-1)/windows**2
+	if windows==1:
+		intr=1
+	ret=(inefficiency+intr)**0.5
+	return ret
 
+def analeff(T,d,p,sd_arr,mixedcovadj):
+	
+	covprob,k,Pd=calculations.get_covprobarray(T,p,sd_arr,mixedcovadj,d)
+	n_diagonals=np.arange(T-1,0,-1)
+	tz2bias0=Pd*d**2
+						
+	P=np.sum(2*n_diagonals[:k]*covprob)
+	P+=np.sum(2*n_diagonals[k:]*(Pd**2))
+	P+=T*Pd
+	
+	P=P/(T**2)
+	var=P*d**4-tz2bias0**2
+	return var,covprob,Pd,tz2bias0
 
 def calc_adj(win,cluster,pmsq,d,p,sd_arr):
 	if win==0:
 		return 1,np.sum(p*sd_arr)
 	if cluster>1:
 		if win>cluster:
-			
+
 			wc=win/cluster
-			var1,P1=prob_space(p, sd_arr, int(wc)+1)
-			var2,P2=prob_space(p, sd_arr, int(wc)+2)
-			tz1=ticksizebias(var1*(win/(int(wc)+1)), P1, win, pmsq, d)
-			tz2=ticksizebias(var2*(win/(int(wc)+2)), P2, win, pmsq, d)
-			E1=E_abs_calc(var1,P1,int(wc)+1)
-			E2=E_abs_calc(var2,P2,int(wc)+2)
-			x=(wc-int(wc))
+			wci=int(wc)
+			var1,P1=prob_space(p, sd_arr, wci+1)
+			var2,P2=prob_space(p, sd_arr, wci+2)
+			tz1=ticksizebias(var1*(win/(wci+1)), P1, win, pmsq, d)
+			tz2=ticksizebias(var2*(win/(wci+2)), P2, win, pmsq, d)
+			E1=E_abs_calc(var1,P1,wci+1)
+			E2=E_abs_calc(var2,P2,wci+2)
+			x=(wc-wci)
 			E = (1-x)*E1+x*E2
 			tz = (1-x)*tz1+x*tz2
 		else:
@@ -71,61 +119,67 @@ def calc_adj(win,cluster,pmsq,d,p,sd_arr):
 		E = E_abs_calc(var,P,win)
 	return tz,E
 
+def calc_E_rng(win, cluster, pmsq, d, p, sd_arr):
+	if win<2:
+		return 1
+	tz,E=calc_adj(win-1, cluster, pmsq, d, p, sd_arr)
+	a=np.exp(-(win-2)**0.5*0.267)
+	return (E*(2-a))	
+
+def ticksizebias(var,P,win,pmsq,d):
+	tz=asympt_var(d, var)
+	tz=np.sum(P*tz)**0.5/(pmsq*win**0.5)
+	return tz
+
+def asympt_var(d,var):
+
+	sd=var**0.5
+	if d==0:
+		v=1
+	v1=var+(d**2)/6.0
+	v2=2*(d*sd)/((2.0*np.pi)**0.5)
+	cond=d/sd<2.5
+	v=cond*v1+(cond==0)*v2
+	return v
+
 def cluster_inflation(p,win,cluster,T,sd_arr,d):
 	#if cluster==1:
 	#	return 1
 
 	var=np.sum(p*sd_arr**2)
 	sd=np.sum(p*sd_arr)
-	
+
+
 	N=int(T/win)
-	Es1,Es2=EsN(p, sd_arr, win,1,var)
-	
-	ineff_c_sq1=((np.pi/4)**0.5*d*Es1-Es2*(4/np.pi)**0.5)/Es1**2
-	ineff_c_sq2=max(((cluster/win),1))*((Es2/Es1**2)-1)
-	ineff_c_sq=(ineff_c_sq1+ineff_c_sq2)/N
-	ineff_c_sq05=ineff_c_sq**0.5
-	
-	tzbias3=d*((np.pi/8)**0.5)/(sd*T**0.5)
-	
+
+
 	Es4,E_abs_sq_inv=Esd4(p, sd_arr, win,1,var)
-	
-	
+
 	Es4_cluster,E_abs_sq_inv_cluster=Esd4(p, sd_arr,win,cluster,var)
 
 	ineff_c_sq=(2*Es4_cluster+max(((cluster/win),1))*((Es4_cluster)-1))/N
 	ineff_sq=(3*Es4-1)/N
 	ineff_r=(ineff_c_sq/ineff_sq)**0.5
-	
-	var_arr,P=prob_space(p, sd_arr, int(cluster/win))
-	tzbias4=np.sum(P*d*((np.pi/8)**0.5)/((var_arr*win/cluster)**0.5*T**0.5))
-	tzbias2=d*((np.pi/8)**0.5)/(var**0.5*T**0.5)
-	tzbias3=d*((np.pi/8)**0.5)/(sd*T**0.5)
 
-	
-	
 	ineff_c_abs=(max(((cluster/win),1))*(E_abs_sq_inv_cluster-1)+E_abs_sq_inv_cluster*(np.pi*0.5-1))/N
 	ineff_abs=((E_abs_sq_inv-1)+E_abs_sq_inv*(np.pi*0.5-1))/N
 	ineff_abs_r=(ineff_c_abs/ineff_abs)**0.5
-	#print(((E_abs_sq_inv_cluster/E_abs_sq_inv)**2,win))
-	
 
-	ineff_c_abs2=max((ineff_c_abs**0.5,tzbias2))
-	ineff_c_sq2=max((ineff_c_sq**0.5,tzbias2))
-	return (ineff_c_abs2,ineff_c_sq2)
-	
+
+	return (ineff_abs_r,ineff_r)
+
 def Esd4(p, sd_arr, win,cluster,v):
 	eff_win=max((win/cluster,1))
 	eff_win=int(np.round(eff_win,0))
 	var,P=prob_space(p, sd_arr, eff_win)
 	var=var/(eff_win)
 	r=np.sum(P*var**2)/v**2
-	
+
 	E_abs_sq_inv=v/np.sum(P*var**0.5)**2
-	
+
 	return r, E_abs_sq_inv
-	
-	
+
+
 def EsN(p, sd_arr, win,cluster,v):
 	eff_win=max((win/cluster,1))
 	eff_win=int(np.round(eff_win,0))
@@ -133,15 +187,18 @@ def EsN(p, sd_arr, win,cluster,v):
 	Es1=np.sum(P*var**0.5)
 	Es2=np.sum(P*var)
 
-	
+
 	return Es1, Es2
 
 
-def prob_space(p,sd_arr,win):
+def prob_space(p,sd_arr,win,retsd=False):
 	"""returns the set of outcomes (variances) var and its probabilities P"""
 	sd_arrsq=sd_arr**2
 	if type(sd_arr)==float or type(sd_arr)==np.float64 or win>450:
-		var=np.sum(p*sd_arr**2)*win
+		if retsd:
+			sd=np.sum(p*sd_arr)*win
+			return sd, 1
+		var=np.sum(p*sd_arrsq)*win
 		return var, 1
 	K=len(sd_arr)
 	a=np.rollaxis(np.indices([win+1]*(K-1)),0,K).reshape((win+1)**(K-1),K-1)
@@ -149,19 +206,18 @@ def prob_space(p,sd_arr,win):
 	b=win-np.sum(a,1).reshape((len(a),1))
 	Q=np.concatenate((a,b),1)
 	P=multinominaldist(Q,p)
+	if retsd:
+		sd=np.sum(Q*sd_arr,1)
+		return sd,P
 	var=np.sum(Q*sd_arrsq,1)
 	return var,P
 
 def E_abs_calc(var,P,win):
 	E_sd=np.sum(P*var**0.5)/win**0.5
-	
+
 	return E_sd
 
-def ticksizebias(var,P,win,pmsq,d):
-	tz=asympt_var(d, var)
-	tz=np.sum(P*tz)**0.5/(pmsq*win**0.5)
-	return tz
-	
+
 
 def multinominaldist(q,p):
 	a=special.gammaln(np.sum(q[0])+1)
@@ -189,7 +245,7 @@ def random_mixed_normal(mu,N,sd_arr,p,cluster):
 	rnd=np.random.normal(mu,sd_rm,N)
 
 	return rnd
-	
+
 def return_calc(p,d,N,windows,win,p0):	
 	if d==0:
 		p_obs=p
@@ -207,102 +263,117 @@ def return_calc(p,d,N,windows,win,p0):
 
 
 
-	
-def sim_returns(mixed_norm,mu,sd,N,d,win,cluster,p,sd_arr):
+
+def sim_returns(mixed_norm,mu,sd,N,d,win,cluster,p,psd,sd_arr):
 	windows=int(N/win)
 	N=windows*win	
-		
+
 	if mixed_norm:
 		rnd=random_mixed_normal(mu,N,sd_arr,p,cluster)
 	else:
+		m=0
 		rnd=np.random.normal(mu,sd,N)
-	
+
 	#if rho>0: not in use, clustering used instead
 	#	rnd=rnd-rho*np.roll(rnd,1)
-	
+
 	p0=1+np.random.uniform(-d, d)#ensures it does not allways start far from a changing value
 	p_cont=np.exp(np.cumsum(rnd))
 	p_cont=p_cont*p0
-	
-	lp_obs,ret_period=return_calc(p_cont,d,N,windows,win,p0)
-	psd=np.sum(p*sd_arr)
 
-	return lp_obs,ret_period,sd_arr,p,windows,psd
-	
-	
-	
-def simulation(mu,sd,N,d,win,adj,mixed_norm,cluster,p,sd_arr,E_abs,E_abs2,pmsq, avg_tz_bias,tz_bias):
-	
-	lp_obs,ret_period,sd_arr,p,windows,psd=sim_returns(mixed_norm,mu,sd,N,d, win,cluster,p,sd_arr)
-	
+	lp_obs,ret_period=return_calc(p_cont,d,N,windows,win,p0)
+
+
+	return lp_obs,ret_period,sd_arr,p,windows
+
+
+
+def simulation(mu,sd,N,d,win,adj,mixed_norm,cluster,p,sd_arr,E_abs,E_abs2,pmsq,psd, avg_tz_bias,tz_bias):
+
+	lp_obs,ret_period,sd_arr,p,windows=sim_returns(mixed_norm,mu,sd,N,d, win,cluster,p,psd,sd_arr)
+
 
 	rng=rng_func(lp_obs,win,adj,mixed_norm,psd,cluster,p,sd_arr,E_abs2,sd)
 
-	msq_adj,msq_unadj,avg_abs,msq1,msq2=msq_func(win,windows,ret_period,adj,pmsq,sd_arr,d,p,psd,E_abs, avg_tz_bias,tz_bias,sd)
-	
-	return np.array([rng,msq_adj,msq_unadj,avg_abs,msq1,msq2])
+	#msq_adj,msq_unadj,avg_abs,msq=msq_func(win,windows,ret_period,adj,pmsq,sd_arr,d,p,psd,E_abs, avg_tz_bias,tz_bias,sd)
+
+	#return np.array([rng,msq_adj,msq_unadj,avg_abs,msq])
+
+	r=msq_func(win,windows,ret_period,adj,pmsq,sd_arr,d,p,psd,E_abs, avg_tz_bias,tz_bias,sd)
+
+	return [rng]+list(r)
 
 
-def asympt_var(d,var):
-	
-	sd=var**0.5
-	if d==0:
-		v=1
-	v1=var+(d**2)/6.0
-	v2=2*(d*sd)/((2.0*np.pi)**0.5)
-	cond=d/sd<2.5
-	v=cond*v1+(cond==0)*v2
-	return v
+
+
 
 
 def msq_func(win,windows,ret,adj,pmsq,sd_arr,d,p,psd,E_abs, avg_tz_bias,tz_bias,sd):
 	if windows==1:
-		return np.nan,np.nan,np.nan
-	freq=len(np.nonzero(ret==0)[0])/len(ret)
+		return np.nan,np.nan
+	freq=len(np.nonzero(ret!=0)[0])
+	#return calccovars(d,psd,ret,win,windows,1500)
 	ret=ret-np.sum(ret)/(windows)
 	ln_bias=(2*np.exp(special.psi((windows-1)/2))/(windows-1))**0.5
 
-	dofa=dof_adj(windows-1)
-	
-	
 	msq=(np.sum(ret**2)/(win*(windows-1)))
-	
-	avg_abs=(np.sum(np.abs(ret))/win**0.5)/(((windows-1)*(windows))**0.5)
 
-	abs_bias=ln_bias*(2/np.pi)**0.5/dofa
+	avg_abs=(np.sum(np.abs(ret))/win**0.5)/(((windows-1)*(windows))**0.5)
 	
+	dofadj=dof_adj(windows-1)
+	abs_bias=(2/np.pi)**0.5/dofadj
+
 	avg_abs=avg_abs/abs_bias
 	if adj:
-		avg_abs=avg_abs/E_abs
+		mixedadj=(((windows-1)*E_abs**2+sd**2)/windows)**0.5
+		avg_abs=avg_abs/mixedadj
 	else:
 		avg_abs=avg_abs/sd
-	
-	msq_adj=msq/(ln_bias*tz_bias*pmsq)**2
-	msq_unadj=msq/(ln_bias*pmsq)**2
+
+	msq_adj=msq/(tz_bias*pmsq)**2
+	msq_unadj=msq*(windows-1)/(windows*pmsq**2)
 	msq_adj2=msq/(tz_bias*pmsq)**2
-	return msq_adj,msq_unadj,avg_abs,msq,msq**2
+
+	return [msq_adj,avg_abs]
+
+
+def calccovars(d,sd,ret,win,windows,n):
+	Pd=((2/np.pi)**0.5*sd/d)
+	tz2bias=(d*(2/np.pi)**0.5*sd)
+	tz4bias=(d**3*(2/np.pi)**0.5*sd)
+	tz2bias=1
+	if True:
+		var4=np.sum(ret**4)/(win*(windows-1)*tz2bias**2)		
+		covars=[(np.sum((ret[i:]*ret[:-i])**2)/(win*(windows-i)*tz2bias**2)) for i in range(1,n)]
+		i=10000
+		cvN=np.sum((ret[i:]*ret[:-i])**2)/(win*(windows-i)*tz2bias**2)
+		return [var4]+covars +[cvN]
+	covars=(np.sum((ret[n:]*ret[:-n])**2)/(win*(windows-n)*tz2bias**2))
+	c=np.sum(ret!=0)/(Pd*len(ret))
+	return [c,covars]	
 
 
 
-def dof_adj(k):
+
+def dof_adj(k,j=1):
 
 	if k>250:
 		a=1
 	else:
 		if k<1:
 			k=1
-		a=2**0.5*special.gamma((k+1)/2)/(special.gamma(k/2))	
-		a=a/k**0.5
+		a=2**(j/2)*special.gamma((k+j)/2)/(special.gamma(k/2))	
+		a=a/k**(j/2)
 	return a
 
-	
+
 def rng_func(data,win, adj,mixed_norm,psd,cluster,p,sd_arr,E_abs,sd):
 	if win==1:
 		return np.nan	
 
 	mx=np.max(data,0)
 	mn=np.min(data,0)
-	as_exp=(8/np.pi)**0.5
+	as_exp=(2/np.pi)**0.5
 	rng=np.mean(mx-mn)/(as_exp*(win-1)**0.5)
 	if not adj:
 		return rng/sd
