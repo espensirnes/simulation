@@ -4,12 +4,12 @@ import integration
 import functions as fu
 
 
-def get_covprobarray(T,p,sd_arr,adj,d):
+def get_covprobarray(T,p,sd_arr,adj,d,cluster):
 	covprob=getcalculations()
 	k,Pd=convergenceperiod(p, sd_arr,d,covprob)
 	
 	if k>len(covprob)-1:
-		extrapolation=0.31827*(1/np.arange(1501, min((k,28800))))**0.5
+		extrapolation=0.31827*(1/np.arange(1501,min((k+1,28800))))**0.5
 		covprob=np.append(covprob,extrapolation)	
 		kmax=min((k,28800-1))
 	else:
@@ -17,11 +17,19 @@ def get_covprobarray(T,p,sd_arr,adj,d):
 
 	
 	if kmax>4 and adj<1:
-		covprob[1:]=adj*covprob[1:]
-		m=(covprob[1]-Pd)/(covprob[1]-covprob[kmax])
-		covprob[1:]=covprob[1]-(covprob[1]-covprob[1:])*m
+		covprob_adj=1*covprob
+		m=(covprob[1]*adj-Pd)/(covprob[1]*adj-covprob[kmax]*adj)
+		covprob_adj[1:]=covprob[1]*adj*(1-m)+covprob[1:]*m*adj
+		if cluster>1:
+			#Old:clustP=np.minimum(np.cumprod(np.ones(len(covprob)-1)*(cluster-1)/cluster),1)
+			clustP=1-(np.minimum(np.arange(len(covprob)-1),cluster)/cluster)
+			covprob_adj[1:]=(1-clustP)*covprob_adj[1:]+clustP*covprob[1:]
+		covprob=covprob_adj
 
-	
+		a=0
+
+	if len(covprob[1:k+1])!=k and k<28800:
+		a=0
 
 	return covprob[1:k+1]*Pd,k,Pd
 
@@ -31,11 +39,10 @@ def convergenceperiod(p,sd_arr,d,covprob):
 		d=1
 	if type(sd_arr)!=np.ndarray:
 		Pd=((2/np.pi)**0.5*sd_arr/d)
-		return convergenceperiod_single(Pd,covprob),Pd
+		return convergenceperiod_single(sd_arr,d,covprob),Pd
 	s=0
 	for i in range(len(sd_arr)):
-		Pd=((2/np.pi)**0.5*sd_arr[i]/d)
-		k=convergenceperiod_single(Pd,covprob)
+		k=convergenceperiod_single(sd_arr[i],d,covprob)
 		s+=p[i]/max((k,1))
 	Pd=((2/np.pi)**0.5*np.sum(sd_arr*p)/d)
 	return int(1/s),Pd
@@ -46,10 +53,10 @@ def cutcovprobarray(Pd, covprob):
 	c=covprob[1:k+1]*Pd
 	return k,c
 
-def convergenceperiod_single(Pd,covprob):
-
+def convergenceperiod_single(sd,d,covprob):
+	Pd=((2/np.pi)**0.5*sd/d)
 	if covprob[-1]>Pd:
-		k=1+(0.008217813121682**2*((len(covprob)-2)/Pd**2))
+		k=1+0.31826**2*(np.pi/2)*(d/sd)**2
 		return int(k)
 	k=getk(covprob,Pd)
 	return k
